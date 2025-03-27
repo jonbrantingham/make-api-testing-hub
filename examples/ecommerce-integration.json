@@ -1,0 +1,294 @@
+{
+  "flow": [
+    {
+      "id": "scheduler",
+      "module": "scheduler:ActionSchedule",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "maxIterations": 0,
+        "frequency": {
+          "unit": "hours",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "api-hub-products-request",
+      "module": "http:ActionSendData",
+      "summary": "Log Products API Request",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "REPLACE_WITH_YOUR_API_HUB_WEBHOOK_URL",
+        "body": {
+          "url": "https://api.example.com/products",
+          "method": "GET",
+          "headers": "{{toJSON({\"Authorization\": \"Bearer \" + access_token})}}",
+          "queryParams": "{{toJSON({\"page\": 1, \"per_page\": 100})}}",
+          "body": "",
+          "sourceScenario": "E-Commerce Integration",
+          "environment": "production",
+          "notifyOnError": true
+        },
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "id": "get-products",
+      "module": "http:ActionSendData",
+      "summary": "Fetch Products from API",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "https://api.example.com/products",
+        "method": "GET",
+        "headers": {
+          "Authorization": "Bearer {{access_token}}"
+        },
+        "query": {
+          "page": 1,
+          "per_page": 100
+        }
+      }
+    },
+    {
+      "id": "iterator",
+      "module": "iterator:ActionIterator",
+      "summary": "Process Each Product",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "limit": 100,
+        "source": "{{3.body.products}}",
+        "mode": "stop-when-empty"
+      }
+    },
+    {
+      "id": "api-hub-inventory-request",
+      "module": "http:ActionSendData",
+      "summary": "Log Inventory Update Request",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "REPLACE_WITH_YOUR_API_HUB_WEBHOOK_URL",
+        "body": {
+          "url": "https://inventory.example.com/update/{{4.currentItem.id}}",
+          "method": "PUT",
+          "headers": "{{toJSON({\"Authorization\": \"Bearer \" + inventory_token})}}",
+          "queryParams": "{{toJSON({})}}",
+          "body": "{{toJSON({\"quantity\": 4.currentItem.available_quantity, \"status\": 4.currentItem.status})}}",
+          "sourceScenario": "E-Commerce Integration",
+          "environment": "production",
+          "notifyOnError": true
+        },
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "id": "update-inventory",
+      "module": "http:ActionSendData",
+      "summary": "Update Inventory System",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "https://inventory.example.com/update/{{4.currentItem.id}}",
+        "method": "PUT",
+        "headers": {
+          "Authorization": "Bearer {{inventory_token}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "quantity": "{{4.currentItem.available_quantity}}",
+          "status": "{{4.currentItem.status}}"
+        }
+      }
+    },
+    {
+      "id": "api-hub-response-log",
+      "module": "http:ActionSendData",
+      "summary": "Log Inventory Update Response",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "REPLACE_WITH_YOUR_API_HUB_WEBHOOK_URL",
+        "body": {
+          "url": "https://api.example.com/response-log",
+          "method": "POST",
+          "headers": "{{toJSON({\"Content-Type\": \"application/json\"})}}",
+          "body": "{{toJSON({\"operation\": \"inventory-update\", \"productId\": 4.currentItem.id, \"status\": 6.statusCode, \"response\": 6.body})}}",
+          "sourceScenario": "E-Commerce Integration - Response Log",
+          "environment": "production",
+          "notifyOnError": false
+        },
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "id": "check-status",
+      "module": "router:Router",
+      "summary": "Check API Response Status",
+      "routes": [
+        {
+          "id": "route-0",
+          "module": "router:routing",
+          "summary": "Success",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 2100,
+              "y": 0
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "less",
+                  "paramOne": "{{6.statusCode}}",
+                  "paramTwo": 400
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            }
+          }
+        },
+        {
+          "id": "route-1",
+          "module": "router:routing",
+          "summary": "Error",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 2100,
+              "y": 300
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "equal",
+                  "paramOne": true,
+                  "paramTwo": true
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            }
+          }
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": "error-handler",
+      "module": "set-variable:SetVariable",
+      "summary": "Prepare Error Data",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "name": "errorData",
+        "value": {
+          "productId": "{{4.currentItem.id}}",
+          "statusCode": "{{6.statusCode}}",
+          "errorMessage": "{{6.body}}",
+          "timestamp": "{{now}}"
+        }
+      }
+    },
+    {
+      "id": "notify-error",
+      "module": "email:ActionSendEmail",
+      "summary": "Send Error Notification",
+      "version": 3,
+      "metadata": {
+        "designer": {
+          "x": 2700,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "subject": "API Error: Inventory Update Failed for Product {{4.currentItem.id}}",
+        "text": "An error occurred while updating inventory:\n\nProduct ID: {{4.currentItem.id}}\nStatus Code: {{6.statusCode}}\nError: {{6.body}}\n\nTimestamp: {{now}}\n\nPlease check the API Testing Hub logs for more details.",
+        "to": [
+          "alerts@example.com"
+        ]
+      }
+    }
+  ],
+  "name": "E-Commerce API Integration with Testing Hub",
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "dlq": false,
+      "name": "E-Commerce Integration",
+      "maxErrors": 3,
+      "roundtrips": 100,
+      "description": "Integrates product data with inventory system with API Testing Hub logging",
+      "autoCommit": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlqAllErrors": false
+    }
+  }
+}
