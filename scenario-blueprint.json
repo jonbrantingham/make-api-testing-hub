@@ -1,0 +1,517 @@
+{
+  "flow": [
+    {
+      "id": "webhook-trigger",
+      "module": "webhook:CustomWebhook",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "parameters": [
+          {
+            "name": "options",
+            "type": "collection",
+            "label": "Options"
+          },
+          {
+            "name": "options.determine",
+            "type": "collection",
+            "label": "Determine request data structure"
+          },
+          {
+            "name": "options.determine.request",
+            "type": "collection",
+            "label": "Request"
+          },
+          {
+            "name": "options.determine.request.sample",
+            "type": "collection",
+            "label": "Sample"
+          }
+        ]
+      },
+      "parameters": {
+        "options": {
+          "hooks": {},
+          "determine": {
+            "request": {
+              "sample": {
+                "url": "https://api.example.com/endpoint",
+                "body": "",
+                "method": "GET",
+                "headers": "{\"Authorization\":\"Bearer token123\"}",
+                "queryParams": "{\"param1\":\"value1\"}",
+                "sourceScenario": "Manual Test",
+                "notifyOnError": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "validate-inputs",
+      "module": "set-variable:SetVariable",
+      "summary": "Initialize validation",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "name": "validationResults",
+        "value": {
+          "valid": true,
+          "errors": []
+        }
+      }
+    },
+    {
+      "id": "check-url",
+      "module": "set-variable:SetVariable",
+      "summary": "Validate URL",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "name": "validationResults",
+        "value": {
+          "valid": "{{if(isEmpty(1.url), false, validationResults.valid)}}",
+          "errors": "{{if(isEmpty(1.url), appendToArray(validationResults.errors, \"URL is required\"), validationResults.errors)}}"
+        }
+      }
+    },
+    {
+      "id": "validate-json",
+      "module": "set-variable:SetVariable",
+      "summary": "Parse JSON fields",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "name": "requestDetails",
+        "value": {
+          "headers": "{{try(parseJSON(1.headers), {})}}",
+          "queryParams": "{{try(parseJSON(1.queryParams), {})}}",
+          "isHeadersValid": "{{isJSON(1.headers) || isEmpty(1.headers)}}",
+          "isQueryParamsValid": "{{isJSON(1.queryParams) || isEmpty(1.queryParams)}}"
+        }
+      }
+    },
+    {
+      "id": "update-validation",
+      "module": "set-variable:SetVariable",
+      "summary": "Update validation results",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "name": "validationResults",
+        "value": {
+          "valid": "{{validationResults.valid && requestDetails.isHeadersValid && requestDetails.isQueryParamsValid}}",
+          "errors": "{{if(!requestDetails.isHeadersValid, appendToArray(validationResults.errors, \"Invalid headers JSON format\"), if(!requestDetails.isQueryParamsValid, appendToArray(validationResults.errors, \"Invalid query parameters JSON format\"), validationResults.errors))}}"
+        }
+      }
+    },
+    {
+      "id": "validation-router",
+      "module": "router:Router",
+      "routes": [
+        {
+          "id": "route-0",
+          "module": "router:routing",
+          "summary": "Valid inputs",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 1800,
+              "y": 0
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "equal",
+                  "paramOne": "{{validationResults.valid}}",
+                  "paramTwo": true
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            },
+            "outputConfiguration": {
+              "outputNestCollections": false
+            }
+          }
+        },
+        {
+          "id": "route-1",
+          "module": "router:routing",
+          "summary": "Invalid inputs",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 1800,
+              "y": 300
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "equal",
+                  "paramOne": true,
+                  "paramTwo": true
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            },
+            "outputConfiguration": {
+              "outputNestCollections": false
+            }
+          }
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": "http-request",
+      "module": "http:ActionSendData",
+      "summary": "Make API request",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "url": "{{1.url}}",
+        "body": "{{1.body}}",
+        "query": "{{requestDetails.queryParams}}",
+        "method": "{{if(isEmpty(1.method), \"GET\", 1.method)}}",
+        "headers": "{{requestDetails.headers}}",
+        "timeout": 30,
+        "throw_on_error": false,
+        "follow_redirect": true,
+        "verify_certificate": true
+      }
+    },
+    {
+      "id": "response-router",
+      "module": "router:Router",
+      "routes": [
+        {
+          "id": "route-0",
+          "module": "router:routing",
+          "summary": "Success",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 2700,
+              "y": 0
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "less",
+                  "paramOne": "{{7.statusCode}}",
+                  "paramTwo": 400
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            },
+            "outputConfiguration": {
+              "outputNestCollections": false
+            }
+          }
+        },
+        {
+          "id": "route-1",
+          "module": "router:routing",
+          "summary": "Error",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 2700,
+              "y": 300
+            }
+          },
+          "parameters": {
+            "conditions": {
+              "tests": [
+                {
+                  "operator": "equal",
+                  "paramOne": true,
+                  "paramTwo": true
+                }
+              ],
+              "testMode": "all-pass",
+              "sortOrder": "desc"
+            },
+            "outputConfiguration": {
+              "outputNestCollections": false
+            }
+          }
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": "sheets-success-log",
+      "module": "google-sheets:ActionCreateRow",
+      "summary": "Log successful request",
+      "version": 5,
+      "metadata": {
+        "designer": {
+          "x": 3000,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "row": {
+          "URL": "{{1.url}}",
+          "Method": "{{1.method}}",
+          "Source": "{{1.sourceScenario}}",
+          "Timestamp": "{{now}}",
+          "Status Code": "{{7.statusCode}}",
+          "Request Body": "{{1.body}}",
+          "Error Details": "",
+          "Response Body": "{{if(length(7.body) > 50000, substring(7.body, 0, 50000) + \"... (truncated)\", 7.body)}}",
+          "Response Time": "{{7.duration}}",
+          "Request Headers": "{{toJSON(requestDetails.headers)}}",
+          "Environment": "{{if(1.environment, 1.environment, \"default\")}}"
+        },
+        "tableId": "API Test Logs"
+      }
+    },
+    {
+      "id": "sheets-error-log",
+      "module": "google-sheets:ActionCreateRow",
+      "summary": "Log error request",
+      "version": 5,
+      "metadata": {
+        "designer": {
+          "x": 3000,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "row": {
+          "URL": "{{1.url}}",
+          "Method": "{{1.method}}",
+          "Source": "{{1.sourceScenario}}",
+          "Timestamp": "{{now}}",
+          "Status Code": "{{7.statusCode}}",
+          "Request Body": "{{1.body}}",
+          "Error Details": "{{if(7.statusCode >= 400, concat(\"HTTP \", 7.statusCode, \" Error\"), \"\")}}",
+          "Response Body": "{{if(length(7.body) > 50000, substring(7.body, 0, 50000) + \"... (truncated)\", 7.body)}}",
+          "Response Time": "{{7.duration}}",
+          "Request Headers": "{{toJSON(requestDetails.headers)}}",
+          "Environment": "{{if(1.environment, 1.environment, \"default\")}}"
+        },
+        "tableId": "API Test Logs"
+      }
+    },
+    {
+      "id": "format-success-response",
+      "module": "json:ActionCreateJSON",
+      "summary": "Format success response",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 3300,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "json": {
+          "logId": "{{9.id}}",
+          "success": true,
+          "timestamp": "{{now}}",
+          "statusCode": "{{7.statusCode}}",
+          "responseBody": "{{try(parseJSON(7.body), 7.body)}}",
+          "responseTimeMs": "{{7.duration}}"
+        }
+      }
+    },
+    {
+      "id": "format-error-response",
+      "module": "json:ActionCreateJSON",
+      "summary": "Format error response",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 3300,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "json": {
+          "error": "{{if(7.statusCode >= 400, concat(\"HTTP \", 7.statusCode, \" Error\"), \"\")}}",
+          "logId": "{{10.id}}",
+          "success": false,
+          "timestamp": "{{now}}",
+          "statusCode": "{{7.statusCode}}",
+          "responseBody": "{{try(parseJSON(7.body), 7.body)}}",
+          "responseTimeMs": "{{7.duration}}"
+        }
+      }
+    },
+    {
+      "id": "format-validation-error",
+      "module": "json:ActionCreateJSON",
+      "summary": "Format validation error",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "json": {
+          "errors": "{{validationResults.errors}}",
+          "success": false,
+          "timestamp": "{{now}}"
+        }
+      }
+    },
+    {
+      "id": "error-notification",
+      "module": "set-variable:SetVariable",
+      "summary": "Prepare error notification",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 3600,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "name": "notification",
+        "value": {
+          "sent": "{{now}}",
+          "details": "{{if(7.statusCode >= 400, concat(\"HTTP \", 7.statusCode, \" Error\"), \"\")}}",
+          "message": "API Error: {{1.url}} returned status {{7.statusCode}}"
+        }
+      }
+    },
+    {
+      "id": "webhook-response-success",
+      "module": "webhook:CustomResponse",
+      "summary": "Send success response",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 3600,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "body": "{{11.json}}",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "statusCode": 200
+      }
+    },
+    {
+      "id": "webhook-response-error",
+      "module": "webhook:CustomResponse",
+      "summary": "Send error response",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 3900,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "body": "{{12.json}}",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "statusCode": "{{if(7.statusCode, 7.statusCode, 400)}}"
+      }
+    },
+    {
+      "id": "webhook-response-validation-error",
+      "module": "webhook:CustomResponse",
+      "summary": "Send validation error response",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 300
+        }
+      },
+      "parameters": {
+        "body": "{{13.json}}",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "statusCode": 400
+      }
+    }
+  ],
+  "name": "API Testing Hub",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "tz": "UTC",
+      "dlq": false,
+      "name": "API Testing Hub",
+      "slots": 5,
+      "module": false,
+      "storage": {},
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "manualData": {},
+      "sequential": false,
+      "description": "A reusable API testing component that can be used standalone or called from other scenarios to log and monitor API requests",
+      "confidential": false,
+      "autoCommitTriggerLast": true
+    }
+  }
+}
